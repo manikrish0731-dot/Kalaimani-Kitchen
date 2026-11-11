@@ -276,7 +276,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
   </div>
 </div>
 
-<dialog id="rDlg" aria-labelledby="rTitle"><div class="r-head"><h2 id="rTitle"></h2><button class="btn ghost" id="rClose" type="button">Close</button></div><div id="rBody"></div></dialog>
+<dialog id="rDlg" aria-labelledby="rTitle"><div class="r-head"><h2 id="rTitle"></h2><button class="btn ghost" id="rClose" type="button">Close</button></div><p class="status" id="rSt"></p><div id="rBody"></div></dialog>
 
 <script>
 (function(){
@@ -997,12 +997,20 @@ function initPlan(){
 var rcache={}, rCtl=null, wake=null;
 try{rcache=JSON.parse(localStorage.getItem('kk-recipes')||'{}')||{};}catch(e){}
 function rSave(){var k=Object.keys(rcache);if(k.length>40)delete rcache[k[0]];try{localStorage.setItem('kk-recipes',JSON.stringify(rcache));}catch(e){}}
+var RL={
+ Tamil:['தேவையான பொருட்கள்','செய்முறை (முடித்த படியைத் தொடவும்)','குறிப்பு'],
+ Hindi:['सामग्री','विधि (हर चरण पूरा होने पर टैप करें)','सुझाव'],
+ Telugu:['కావలసిన పదార్థాలు','తయారీ విధానం (పూర్తయిన దశను నొక్కండి)','చిట్కా'],
+ Malayalam:['ആവശ്യമായ സാധനങ്ങൾ','തയ്യാറാക്കുന്ന വിധം (കഴിഞ്ഞ ഘട്ടം ടാപ്പ് ചെയ്യുക)','നുറുങ്ങ്'],
+ Kannada:['ಬೇಕಾದ ಸಾಮಗ್ರಿಗಳು','ಮಾಡುವ ವಿಧಾನ (ಮುಗಿದ ಹಂತವನ್ನು ಒತ್ತಿ)','ಸಲಹೆ']
+};
 function rShow(d){
   var box=$('rBody'); box.textContent='';
-  box.append(h('p',{class:'sub',text:'For '+d.servings+(d.servings===1?' person':' people')+'. Change "People eating" in the planner to rescale.'}),h('h3',{text:'Ingredients'}));
+  var L=RL[d.lang]||['Ingredients','Method (tap a step when done)','Tip'];
+  box.append((d.lang&&d.lang!=='English')?null:h('p',{class:'sub',text:'For '+d.servings+(d.servings===1?' person':' people')+'. Change "People eating" in the planner to rescale.'}),h('h3',{text:L[0]}));
   var ul=h('ul',{class:'r-ings'});
   d.ingredients.forEach(function(x){ul.append(h('li',{},x.qty?h('strong',{text:x.qty+' '}):null,x.item));});
-  box.append(ul,h('h3',{text:'Method (tap a step when done)'}));
+  box.append(ul,h('h3',{text:L[1]}));
   var ol=h('ol',{class:'r-steps'});
   d.steps.forEach(function(t){
     var li=h('li',{text:t,tabindex:'0',role:'button'});
@@ -1012,7 +1020,7 @@ function rShow(d){
     ol.append(li);
   });
   box.append(ol);
-  if(d.tip) box.append(h('p',{class:'also',text:'Tip: '+d.tip}));
+  if(d.tip) box.append(h('p',{class:'also',text:L[2]+': '+d.tip}));
 }
 function builtIn(r){
   var n=st.people, F=FULL[r.n];
@@ -1026,23 +1034,30 @@ function builtIn(r){
   steps.push('Taste, adjust the salt and serve hot.');
   return {servings:n,ingredients:ings,steps:steps,tip:r.o.length?'Also good with: '+r.o.join(', ')+'.':''};
 }
-async function openRecipe(name){
-  var dlg=$('rDlg'), box=$('rBody'), key=name+'|'+st.people;
-  $('rTitle').textContent=name; box.textContent='';
-  if(!dlg.open) dlg.showModal();
-  try{if(navigator.wakeLock) wake=await navigator.wakeLock.request('screen');}catch(e){}
-  var br=recipeByName(name); if(br){rShow(builtIn(br));return;}
-  if(rcache[key]){rShow(rcache[key]);return;}
-  if(!$('passcode').value.trim()){box.textContent='Enter the family passcode in the "Fridge photo or list" box first, then open the recipe again.';return;}
-  box.textContent='Writing the recipe for '+st.people+(st.people===1?' person':' people')+'. This takes a few seconds.';
+function rMore(name,b){
+  $('rBody').append(h('button',{class:'btn ghost',type:'button',style:'margin-top:14px',text:st.lang==='English'?'Get a more detailed version (uses Claude)':'Show in '+st.lang+' (uses Claude)',onclick:function(){rFetch(name,b);}}));
+}
+async function rFetch(name,base){
+  var msg=$('rSt'), key=name+'|'+st.people+'|'+st.lang;
+  if(!$('passcode').value.trim()){msg.textContent='Enter the family passcode in the "Fridge photo or list" box first, then try again.';return;}
+  msg.textContent='Writing the detailed recipe in '+st.lang+'. This can take up to 30 seconds.';
   rCtl=new AbortController();
   try{
-    var out=await callApi('recipe',{name:name,servings:st.people},rCtl.signal);
+    var out=await callApi('recipe',{name:name,servings:st.people,lang:st.lang,base:base?JSON.stringify(base):''},rCtl.signal);
     if(!out.recipe||!out.recipe.steps||!out.recipe.steps.length) throw {code:'upstream_error'};
-    rcache[key]=out.recipe; rSave(); rShow(out.recipe);
-  }catch(e){
-    if(!isCancel(e)) box.textContent=errCopy(e);
-  }finally{rCtl=null;}
+    out.recipe.lang=st.lang; rcache[key]=out.recipe; rSave(); msg.textContent=''; rShow(out.recipe);
+  }catch(e){msg.textContent=isCancel(e)?'':errCopy(e);}
+  finally{rCtl=null;}
+}
+async function openRecipe(name){
+  var dlg=$('rDlg'), key=name+'|'+st.people+'|'+st.lang;
+  $('rTitle').textContent=name; $('rBody').textContent=''; $('rSt').textContent='';
+  if(!dlg.open) dlg.showModal();
+  try{if(navigator.wakeLock) wake=await navigator.wakeLock.request('screen');}catch(e){}
+  if(rcache[key]){rShow(rcache[key]);return;}
+  var br=recipeByName(name);
+  if(br){var b=builtIn(br);rShow(b);rMore(name,b);return;}
+  await rFetch(name,null);
 }
 $('rDlg').addEventListener('close',function(){
   if(rCtl) rCtl.abort();
