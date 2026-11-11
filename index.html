@@ -168,6 +168,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
       <h1>Kalaimani Kitchen</h1>
       <p class="lede">Tell it what is in the kitchen. It shows what you can cook tonight, what is one item short, and a video for each dish.</p>
     </div>
+    <div class="chips" role="group" aria-label="Language"><button type="button" class="tog" id="uiEn" aria-pressed="true">English</button><button type="button" class="tog" id="uiTa" aria-pressed="false">தமிழ்</button></div>
   </header>
 
   <div class="cols">
@@ -1104,6 +1105,57 @@ $('bkLoad').addEventListener('change',function(e){
   };
   r.readAsText(f); e.target.value='';
 });
+
+/* ---------- Tamil / English screen language ---------- */
+var TAMAP={
+'In your kitchen':'உங்கள் சமையலறையில்','Clear all':'அனைத்தையும் நீக்கு','Add':'சேர்','Vegetables and fruit':'காய்கறிகள், பழங்கள்','Protein and dairy':'புரதம், பால் பொருட்கள்','Grains and pantry':'தானியங்கள், மளிகை',
+'Fridge photo or list':'ஃபிரிட்ஜ் புகைப்படம் அல்லது பட்டியல்','Read ingredients':'பொருட்களைப் படி','Preferences':'விருப்பங்கள்','Vegetarian only (no egg, meat or fish)':'சைவம் மட்டும் (முட்டை, இறைச்சி, மீன் இல்லை)',
+'Cuisine':'உணவு வகை','All cuisines':'அனைத்து வகைகள்','Time available':'கிடைக்கும் நேரம்','Any':'ஏதேனும்','Up to 15 min':'15 நிமிடம் வரை','Up to 30 min':'30 நிமிடம் வரை','Up to 45 min':'45 நிமிடம் வரை',
+'Video language':'வீடியோ மொழி','See what I can cook':'என்ன சமைக்கலாம் என்று பார்','Back up my data':'தரவைக் காப்பு எடு','Restore backup':'காப்பை மீட்டெடு',
+'Looking for a specific dish?':'குறிப்பிட்ட உணவைத் தேடுகிறீர்களா?','Search on YouTube':'யூடியூப்பில் தேடு','Plan the week':'வாரத்தைத் திட்டமிடு','People eating':'சாப்பிடுபவர்கள்',
+'Fill the week for me':'எனக்காக வாரத்தை நிரப்பு','Clear plan':'திட்டத்தை அழி','Shopping list':'வாங்க வேண்டிய பட்டியல்','Add ticked items to my kitchen':'குறித்தவற்றை என் சமையலறையில் சேர்','Copy list':'பட்டியலை நகலெடு','Send on WhatsApp':'வாட்ஸ்அப்பில் அனுப்பு',
+'More ideas from Claude':'Claude-இன் மேலும் யோசனைகள்','Suggest more dishes':'மேலும் உணவுகளைப் பரிந்துரை',
+'Monday':'திங்கள்','Tuesday':'செவ்வாய்','Wednesday':'புதன்','Thursday':'வியாழன்','Friday':'வெள்ளி','Saturday':'சனி','Sunday':'ஞாயிறு','Today':'இன்று','Breakfast':'காலை உணவு','Lunch':'மதிய உணவு','Dinner':'இரவு உணவு','Not planned':'திட்டமில்லை',
+'Ready to cook now':'இப்போது சமைக்கத் தயார்','One item away':'ஒரு பொருள் மட்டும் குறைவு','Two or three items away':'இரண்டு மூன்று பொருட்கள் குறைவு','Full recipe':'முழு செய்முறை','Cooked it':'சமைத்தேன்','Watch on YouTube':'யூடியூப்பில் பார்','Watch video':'வீடியோ பார்','You have everything':'எல்லாம் உள்ளது','\u2661 Save':'\u2661 சேமி','\u2665 Saved':'\u2665 சேமித்தது','Close':'மூடு',
+'onion':'வெங்காயம்','tomato':'தக்காளி','potato':'உருளைக்கிழங்கு','carrot':'கேரட்','cauliflower':'காலிஃப்ளவர்','cabbage':'முட்டைக்கோஸ்','spinach':'கீரை','peas':'பட்டாணி','green beans':'பீன்ஸ்','cucumber':'வெள்ளரிக்காய்','mushroom':'காளான்','eggplant':'கத்தரிக்காய்','beetroot':'பீட்ரூட்','okra':'வெண்டைக்காய்','green chili':'பச்சை மிளகாய்','lemon':'எலுமிச்சை','garlic':'பூண்டு','ginger':'இஞ்சி',
+'egg':'முட்டை','chicken':'கோழிக்கறி','fish':'மீன்','shrimp':'இறால்','mutton':'ஆட்டிறைச்சி','paneer':'பன்னீர்','milk':'பால்','curd':'தயிர்','cheese':'பாலாடைக்கட்டி','butter':'வெண்ணெய்','rice':'அரிசி','dal':'பருப்பு','flour':'மாவு','bread':'ரொட்டி','coconut':'தேங்காய்','pasta':'பாஸ்தா','semolina':'ரவை','poha':'அவல்'
+};
+var PHT={addInput:['Add items, e.g. brinjal, beetroot','பொருட்களைச் சேர்க்கவும், எ.கா. கத்தரிக்காய்'],finderInput:['e.g. Basque cheesecake, Hyderabadi biryani','எ.கா. ஹைதராபாத் பிரியாணி']};
+var origTx=new WeakMap(), obsUI=null, uiBusy=false;
+function trText(on){
+  var w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,null), n, list=[];
+  while((n=w.nextNode())) list.push(n);
+  list.forEach(function(n){
+    var pn=n.parentNode&&n.parentNode.nodeName; if(pn==='SCRIPT'||pn==='STYLE') return;
+    if(!on){ if(origTx.has(n)){n.nodeValue=origTx.get(n);origTx.delete(n);} return; }
+    var raw=n.nodeValue, t=raw.replace(/\s+/g,' ').trim(); if(!t) return;
+    var tr=TAMAP[t]||TAMAP[t.toLowerCase()], m;
+    if(!tr&&(m=/^Need (\d+) more$/.exec(t))) tr='இன்னும் '+m[1]+' தேவை';
+    if(!tr) return;
+    if(!origTx.has(n)) origTx.set(n,raw);
+    n.nodeValue=(/^\s/.test(raw)?' ':'')+tr+(/\s$/.test(raw)?' ':'');
+  });
+  Object.keys(PHT).forEach(function(id){$(id).setAttribute('placeholder',PHT[id][on?1:0]);});
+}
+function applyUI(){
+  var ta=st.lang==='Tamil';
+  uiBusy=true; trText(ta); uiBusy=false;
+  document.documentElement.lang=ta?'ta':'en';
+  $('uiEn').setAttribute('aria-pressed',ta?'false':'true'); $('uiTa').setAttribute('aria-pressed',ta?'true':'false');
+  if(!obsUI){
+    var pend=false;
+    obsUI=new MutationObserver(function(){
+      if(uiBusy||pend||st.lang!=='Tamil') return;
+      pend=true; requestAnimationFrame(function(){pend=false;uiBusy=true;trText(true);uiBusy=false;});
+    });
+    obsUI.observe(document.body,{childList:true,subtree:true});
+  }
+}
+function setUiLang(l){st.lang=l;$('lang').value=l;$('lang').dispatchEvent(new Event('change'));}
+$('uiEn').addEventListener('click',function(){setUiLang('English');});
+$('uiTa').addEventListener('click',function(){setUiLang('Tamil');});
+$('lang').addEventListener('change',applyUI);
+applyUI();
 
 /* ---------- Boot ---------- */
 $('today').textContent=new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'});
