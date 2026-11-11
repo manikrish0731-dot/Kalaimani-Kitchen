@@ -25,7 +25,7 @@ img{max-width:100%}
 /* Layout: a kitchen panel on the left (what you have), dishes on the right (what you can cook).
    Palette: leaf green for "have", turmeric for "need", chili red for non-veg. Display face Bricolage Grotesque, body Instrument Sans. */
 :root{
-  --bg:#F1F4EE; --surface:#FFFFFF; --ink:#15261D; --muted:#586A5F; --line:#D5DDD2;
+  --bg:#F7F3EA; --surface:#FFFFFF; --ink:#15261D; --muted:#5E6A5E; --line:#E3DDCC;
   --accent:#1E7A4C; --accent-ink:#FFFFFF; --tint:#E1EEE4;
   --warn:#9A6400; --warn-tint:#FBF0D6; --bad:#B13A2A;
   --f-display:'Bricolage Grotesque',system-ui,sans-serif;
@@ -156,11 +156,38 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 .r-steps{padding-left:22px;margin:6px 0;display:flex;flex-direction:column;gap:10px;font-size:17px}
 .r-steps li{cursor:pointer}
 .r-steps li.done{text-decoration:line-through;color:var(--muted)}
+/* ---- Refreshed look ---- */
+.card{border-radius:18px;padding:18px;box-shadow:0 1px 2px rgba(20,40,25,.06),0 8px 20px rgba(20,40,25,.05);transition:transform .15s}
+.card:hover{transform:translateY(-2px)}
+.card:has(.pill.ok){border-top:4px solid var(--accent)}
+.card:has(.pill.warn){border-top:4px solid var(--warn)}
+.btn{border-radius:999px;min-height:46px;padding:10px 20px}
+input[type=text],select{border-radius:14px;min-height:46px}
+.tog{min-height:38px;padding:6px 14px}
+.group h2{font-size:24px}
+.sum{font-size:17px}
+.plan{border-radius:18px}
+.tabbar{display:none}
+@media (max-width:919px){
+  .lede{display:none}
+  .top{align-items:center;padding-bottom:14px}
+  body{padding-bottom:110px}
+  .tabbar{display:flex;gap:6px;position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);padding:6px 10px calc(6px + env(safe-area-inset-bottom,0px))}
+  .tabbar button{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;min-height:56px;background:none;border:0;border-radius:16px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer}
+  .tabbar button[aria-current="page"]{background:var(--tint);color:var(--accent)}
+  .tabbar .ic{font-size:22px;line-height:1}
+  body[data-tab="kitchen"] main{display:none}
+  body[data-tab="cook"] .side,body[data-tab="plan"] .side{display:none}
+  body[data-tab="cook"] .plan-box{display:none}
+  body[data-tab="plan"] main>section:first-child,body[data-tab="plan"] .sum,body[data-tab="plan"] #results,body[data-tab="plan"] .ai-box,body[data-tab="plan"] .note{display:none}
+  body[data-tab="plan"] .plan-box{margin-top:0;border-top:0;padding-top:0}
+  dialog{width:100%;max-width:100%;margin:auto 0 0;border-radius:22px 22px 0 0;max-height:92vh}
+}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 
 </head>
-<body>
+<body data-tab="cook">
 <div class="wrap">
   <header class="top">
     <div>
@@ -170,6 +197,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
     </div>
     <div class="chips" role="group" aria-label="Language"><button type="button" class="tog" id="uiEn" aria-pressed="true">English</button><button type="button" class="tog" id="uiTa" aria-pressed="false">தமிழ்</button></div>
   </header>
+  <nav class="tabbar" aria-label="Sections"><button type="button" data-tab="kitchen"><span class="ic">🥕</span><span>Kitchen</span></button><button type="button" data-tab="cook"><span class="ic">🍳</span><span>Cook</span></button><button type="button" data-tab="plan"><span class="ic">📅</span><span>Plan</span></button></nav>
 
   <div class="cols">
     <div class="side">
@@ -1157,6 +1185,16 @@ $('uiTa').addEventListener('click',function(){setUiLang('Tamil');});
 $('lang').addEventListener('change',applyUI);
 applyUI();
 
+/* ---------- Bottom menu (phones) ---------- */
+TAMAP['Kitchen']='சமையலறை'; TAMAP['Cook']='சமையல்'; TAMAP['Plan']='திட்டம்';
+function setTab(t){
+  document.body.setAttribute('data-tab',t);
+  Array.prototype.forEach.call(document.querySelectorAll('.tabbar button'),function(b){b.setAttribute('aria-current',b.getAttribute('data-tab')===t?'page':'false');});
+  window.scrollTo(0,0);
+}
+Array.prototype.forEach.call(document.querySelectorAll('.tabbar button'),function(b){b.addEventListener('click',function(){setTab(b.getAttribute('data-tab'));});});
+setTab('cook'); applyUI();
+
 /* ---------- Boot ---------- */
 $('today').textContent=new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'});
 buildGroups(); initPrefs(); initFinder(); initPhoto(); initList(); initIdeas(); initPlan();
@@ -1165,7 +1203,7 @@ $('addForm').addEventListener('submit',function(e){
   var inp=$('addInput'); addItems(inp.value); inp.value='';
 });
 $('clear').addEventListener('click',function(){pantry.clear();changed();});
-$('jump').addEventListener('click',function(){var m=$('main');m.scrollIntoView({behavior:'smooth',block:'start'});m.focus({preventScroll:true});});
+$('jump').addEventListener('click',function(){setTab('cook');});
 syncPantry(); renderResults();
 initApi();
 if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}
