@@ -230,6 +230,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
             </select>
           </label>
         </div>
+        <div class="photo-row"><button class="btn ghost" id="bkSave" type="button">Back up my data</button><label class="btn ghost" for="bkLoad" style="cursor:pointer">Restore backup</label><input type="file" id="bkLoad" accept=".json,application/json" hidden><span class="status" id="bkStatus" style="margin:0"></span></div>
         <button class="btn jump" id="jump" type="button">See what I can cook</button>
       </section>
     </div>
@@ -433,6 +434,8 @@ try{
 }catch(e){}
 st.plan=normalizePlan(st.plan);
 if(!Array.isArray(st.bought)) st.bought=[];
+if(!Array.isArray(st.fav)) st.fav=[];
+if(!st.cooked||typeof st.cooked!=='object') st.cooked={};
 st.people=Math.min(20,Math.max(1,Math.round(Number(st.people))||4));
 var pantry=new Set(st.pantry);
 function save(){
@@ -521,6 +524,13 @@ function compute(){
   });
   return out;
 }
+function toggleFav(n){var i=st.fav.indexOf(n);if(i>=0)st.fav.splice(i,1);else st.fav.push(n);save();renderResults();}
+function cookedLine(n){
+  var t=st.cooked[n]; if(!t) return null;
+  var days=Math.max(0,Math.floor((Date.now()-t)/864e5));
+  return h('p',{class:'also',text:'Cooked '+(days===0?'today':days+(days===1?' day':' days')+' ago')});
+}
+function favFirst(l){return l.slice().sort(function(a,b){return (st.fav.indexOf(b.n)>=0)-(st.fav.indexOf(a.n)>=0);});}
 function cardEl(d){
   var missN=d.miss.length;
   var pill=h('span',{class:'pill '+(d.ai?'ai':(missN?'warn':'ok')),text:d.ai?'Idea from Claude':(missN?('Need '+missN+' more'):'You have everything')});
@@ -536,8 +546,11 @@ function cardEl(d){
     ings,
     h('p',{class:'how',text:d.h}),
     also,
+    cookedLine(d.n),
     h('div',{class:'acts'},
       h('button',{class:'yt rec',type:'button',text:'Full recipe',onclick:function(){openRecipe(d.n);}}),
+      h('button',{class:'yt rec',type:'button','aria-pressed':st.fav.indexOf(d.n)>=0?'true':'false',text:st.fav.indexOf(d.n)>=0?'\u2665 Saved':'\u2661 Save',onclick:function(){toggleFav(d.n);}}),
+      h('button',{class:'yt rec',type:'button',text:'Cooked it',onclick:function(){st.cooked[d.n]=Date.now();save();renderResults();}}),
       h('a',{class:'yt',href:ytUrl(d.n),target:'_blank',rel:'noopener noreferrer',text:'Watch on YouTube'}))
   );
 }
@@ -556,6 +569,7 @@ function renderResults(){
   var ready=all.filter(function(d){return d.miss.length===0;}).sort(function(a,b){return (b.have.length-a.have.length)||(a.t-b.t);});
   var one=all.filter(function(d){return d.miss.length===1;}).sort(byFit);
   var few=all.filter(function(d){return d.miss.length>=2&&d.miss.length<=3&&d.pct>=0.5;}).sort(byFit);
+  ready=favFirst(ready);one=favFirst(one);few=favFirst(few);
   var parts=[];
   parts.push('<strong>'+ready.length+'</strong> '+(ready.length===1?'dish':'dishes')+' ready to cook');
   parts.push('<strong>'+one.length+'</strong> one item away');
@@ -875,6 +889,11 @@ function renderPlan(){
   renderShop();
 }
 function shuffle(a){for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t;}return a;}
+function planScore(n){
+  var sc=st.fav.indexOf(n)>=0?1:0, t=st.cooked[n];
+  if(t&&Date.now()-t<7*864e5) sc-=2;
+  return sc;
+}
 function orderFor(m){
   var pool=mealPool(m).filter(function(r){
     return (!st.veg||r.v===1)&&(st.cuisine==='all'||r.c===st.cuisine)&&(!st.time||r.t<=st.time);
@@ -884,7 +903,7 @@ function orderFor(m){
    pool.filter(function(x){return x.m===1||x.m===2;}),
    pool.filter(function(x){return x.m>2&&x.have>0;}),
    pool.filter(function(x){return x.have===0;})
-  ].forEach(function(t){order.push.apply(order,shuffle(t));});
+  ].forEach(function(t){order.push.apply(order,shuffle(t).sort(function(a,b){return planScore(b.r.n)-planScore(a.r.n);}));});
   return order;
 }
 function fillPlan(){
@@ -949,11 +968,23 @@ function rShow(d){
   box.append(ol);
   if(d.tip) box.append(h('p',{class:'also',text:'Tip: '+d.tip}));
 }
+function builtIn(r){
+  var n=st.people;
+  function row(x,opt){var a=AMT[x];return {item:x,qty:a?fmtAmt(x,a[0]*n).replace(x+' ~ ',''):(opt?'optional':'as needed')};}
+  var ings=r.i.map(function(x){return row(x,false);}).concat(r.o.map(function(x){return row(x,true);}));
+  var steps=['Wash, peel and chop everything first.'];
+  r.h.replace(/\.$/,'').split(/,\s*(?:then\s+|and\s+)?|\s+then\s+/).forEach(function(c){
+    c=c.trim(); if(c) steps.push(c.charAt(0).toUpperCase()+c.slice(1)+'.');
+  });
+  steps.push('Taste, adjust the salt and serve hot.');
+  return {servings:n,ingredients:ings,steps:steps,tip:r.o.length?'Also good with: '+r.o.join(', ')+'.':''};
+}
 async function openRecipe(name){
   var dlg=$('rDlg'), box=$('rBody'), key=name+'|'+st.people;
   $('rTitle').textContent=name; box.textContent='';
   if(!dlg.open) dlg.showModal();
   try{if(navigator.wakeLock) wake=await navigator.wakeLock.request('screen');}catch(e){}
+  var br=recipeByName(name); if(br){rShow(builtIn(br));return;}
   if(rcache[key]){rShow(rcache[key]);return;}
   if(!$('passcode').value.trim()){box.textContent='Enter the family passcode in the "Fridge photo or list" box first, then open the recipe again.';return;}
   box.textContent='Writing the recipe for '+st.people+(st.people===1?' person':' people')+'. This takes a few seconds.';
@@ -971,6 +1002,30 @@ $('rDlg').addEventListener('close',function(){
   if(wake){try{wake.release();}catch(e){} wake=null;}
 });
 $('rClose').addEventListener('click',function(){$('rDlg').close();});
+
+/* ---------- Backup and restore ---------- */
+$('bkSave').addEventListener('click',function(){
+  save();
+  var blob=new Blob([JSON.stringify({app:'kalaimani-kitchen',saved:new Date().toISOString(),data:st})],{type:'application/json'});
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='kalaimani-kitchen-backup-'+new Date().toISOString().slice(0,10)+'.json';
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(function(){URL.revokeObjectURL(a.href);},1000);
+  $('bkStatus').textContent='Backup downloaded.';
+});
+$('bkLoad').addEventListener('change',function(e){
+  var f=e.target.files&&e.target.files[0]; if(!f) return;
+  var r=new FileReader();
+  r.onload=function(){
+    try{
+      var o=JSON.parse(String(r.result)), d=o&&o.app==='kalaimani-kitchen'&&o.data;
+      if(!d||!Array.isArray(d.pantry)) throw 0;
+      if(!confirm('Replace your current data with this backup?')) return;
+      localStorage.setItem(KEY,JSON.stringify(d)); location.reload();
+    }catch(x){$('bkStatus').textContent='That is not a Kalaimani Kitchen backup.';}
+  };
+  r.readAsText(f); e.target.value='';
+});
 
 /* ---------- Boot ---------- */
 $('today').textContent=new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'});
