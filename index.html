@@ -277,7 +277,7 @@ input[type=text],select{border-radius:14px;min-height:46px}
       <div id="results"></div>
       <section class="plan-box" aria-labelledby="h-plan">
         <h2 id="h-plan">Plan the week</h2>
-        <p class="sub">Pick breakfast, lunch and dinner for each day, or let it fill the week with different cuisines. The shopping list shows what is missing, with rough amounts for the number of people eating.</p>
+        <p class="sub">Pick breakfast, lunch and dinner for each day, plus a main dish, gravy, side dish and dessert if you like. The fill button does breakfast, lunch and dinner. The shopping list shows what is missing, with rough amounts for the number of people eating.</p>
         <div class="photo-row">
           <label class="people" for="people">People eating <input type="number" id="people" min="1" max="20" value="4" inputmode="numeric"></label>
           <button class="btn" id="planFill" type="button">Fill the week for me</button>
@@ -406,6 +406,13 @@ RAW.push(
 ['Beetroot Rasam','South Indian',25,1,['beetroot','tomato','dal'],['garlic'],'Boil beetroot and tomato with rasam powder and tamarind, add dal water, finish with a tempering.'],
 ['Salad','World',10,1,['cucumber','tomato','onion'],['carrot','lemon'],'Chop the vegetables, toss with lemon, salt and pepper.'],
 ['Mushroom Salad','World',15,1,['mushroom','onion','tomato'],['cucumber','lemon'],'Saute mushrooms briefly, cool, and toss with fresh vegetables and lemon.']
+);
+RAW.push(
+['Rava Kesari','South Indian',20,1,['semolina','butter','milk'],['banana','peanut'],'Roast semolina in ghee, cook in hot water and milk with sugar until thick, finish with a little ghee.'],
+['Rice Kheer','Indian',45,1,['rice','milk'],['peanut','coconut'],'Simmer washed rice in milk on low heat, stirring often, until creamy, then sweeten with sugar.'],
+['Semiya Payasam','South Indian',25,1,['noodles','milk','butter'],['peanut'],'Roast vermicelli in ghee, boil in milk until soft, add sugar and simmer until creamy.'],
+['Bread Halwa','Indian',20,1,['bread','milk','butter'],['peanut'],'Fry bread pieces in ghee, simmer in milk and sugar until it thickens into a soft halwa.'],
+['Banana Milkshake','World',5,1,['banana','milk'],['peanut'],'Blend ripe banana with cold milk and a spoon of sugar until smooth.']
 );
 var FULL={
 'Chicken Biryani':{i:[['basmati rice',500,'g'],['chicken',800,'g'],['onion',4,'pc'],['tomato',2,'pc'],['curd',150,'g'],['ginger garlic paste',3,'tbsp'],['green chili',4,'pc'],['biryani masala',2,'tbsp'],['red chili powder',2,'tsp'],['turmeric',0.5,'tsp'],['mint leaves',1,'cup'],['coriander leaves',0.5,'cup'],['oil',4,'tbsp'],['ghee',2,'tbsp'],['salt',0,'to taste'],['bay leaf, cardamom, cloves, cinnamon',0,'a few of each']],
@@ -837,7 +844,7 @@ function initIdeas(){
 
 /* ---------- Weekly plan ---------- */
 var DAYS=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
-var MEALS=['Breakfast','Lunch','Dinner'];
+var MEALS=['Breakfast','Lunch','Dinner','Main dish','Gravy','Side dish','Dessert'];
 var BREAKFAST=new Set(['Upma','Poha','Masala Omelette','Bread Omelette','Egg Bhurji','Egg Podimas','Rava Dosa','Onion Uttapam','Ven Pongal','French Toast','French Omelette','Pancakes','Banana Pancakes','Grilled Cheese Sandwich','Spanish Tortilla','Miso Soup','Coconut Chutney','Tomato Chutney']);
 /* Rough amount per person for one serving of a dish: [amount, unit] */
 var AMT={
@@ -854,18 +861,32 @@ var planRows=[], shopList=[];
 function normalizePlan(p){
   var out=[];
   for(var i=0;i<7;i++){
-    var d=p&&p[i];
-    if(Array.isArray(d)) out.push([String(d[0]||''),String(d[1]||''),String(d[2]||'')]);
-    else if(typeof d==='string') out.push(['','',d]);
-    else out.push(['','','']);
+    var d=p&&p[i], row=[];
+    for(var k=0;k<7;k++){row.push(Array.isArray(d)?String(d[k]||''):(typeof d==='string'&&k===2?d:''));}
+    out.push(row);
   }
   return out;
 }
 function blankPlan(){return normalizePlan(null);}
 function recipeByName(n){for(var i=0;i<RECIPES.length;i++){if(RECIPES[i].n===n)return RECIPES[i];}return null;}
 function missingOf(r){return r.i.filter(function(x){return !pantry.has(x);});}
+var DESS=new Set(['Rava Kesari','Rice Kheer','Semiya Payasam','Bread Halwa','Banana Milkshake']);
+function cls(r){
+  var n=r.n;
+  if(DESS.has(n)) return 'dessert';
+  if(/poriyal|fry|chutney|salad|bhurji|podimas|omelette|65|pepper|bruschetta/i.test(n)) return 'side';
+  if(/curry|masala|kurma|sambar|rasam|dal |tadka|gravy|kootu|pappu|masiyal|chettinad|roast|palak|chana/i.test(n)) return 'gravy';
+  return 'main';
+}
 function mealPool(m){
-  return RECIPES.filter(function(r){var b=BREAKFAST.has(r.n);return m===0?b:(m===1?!b:true);});
+  var want=['main','gravy','side','dessert'];
+  return RECIPES.filter(function(r){
+    var b=BREAKFAST.has(r.n);
+    if(m>=3) return cls(r)===want[m-3];
+    if(m===0) return b;
+    if(m===1) return !b&&cls(r)!=='dessert';
+    return cls(r)!=='dessert';
+  });
 }
 function fillOptions(sel,m,current){
   sel.textContent='';
@@ -1186,7 +1207,7 @@ $('lang').addEventListener('change',applyUI);
 applyUI();
 
 /* ---------- Bottom menu (phones) ---------- */
-TAMAP['Kitchen']='சமையலறை'; TAMAP['Cook']='சமையல்'; TAMAP['Plan']='திட்டம்';
+TAMAP['Main dish']='முக்கிய உணவு'; TAMAP['Gravy']='குழம்பு / கிரேவி'; TAMAP['Side dish']='தொடு உணவு'; TAMAP['Dessert']='இனிப்பு'; TAMAP['Kitchen']='சமையலறை'; TAMAP['Cook']='சமையல்'; TAMAP['Plan']='திட்டம்';
 function setTab(t){
   document.body.setAttribute('data-tab',t);
   Array.prototype.forEach.call(document.querySelectorAll('.tabbar button'),function(b){b.setAttribute('aria-current',b.getAttribute('data-tab')===t?'page':'false');});
