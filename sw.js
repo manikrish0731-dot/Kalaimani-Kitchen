@@ -1,4 +1,4 @@
-const V = 'kalaimani-kitchen-v15';
+const V = 'kalaimani-kitchen-v16';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {

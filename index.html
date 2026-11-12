@@ -263,6 +263,13 @@ dialog::backdrop{background:rgba(10,20,14,.55);backdrop-filter:blur(3px);animati
 .r-steps li.done{opacity:.55;transform:scale(.985)}
 .r-steps li.done::before{content:"\2713"}
 .r-ings li{padding:2px 0}
+/* ---- Recipe inside planner ---- */
+.how{margin-top:6px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:0 12px}
+.how summary{cursor:pointer;font-weight:600;color:var(--accent);padding:10px 0;font-size:14px}
+.howb{padding-bottom:12px;font-size:15px}
+.howb h3{font-size:15px;margin:10px 0 4px}
+.howb .r-steps{font-size:15px}
+.meal:has(.how[open]){grid-column:1/-1}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -1013,9 +1020,10 @@ function fillOptions(sel,m,current){
 function updateCell(i,m){
   var c=planRows[i]&&planRows[i][m]; if(!c) return;
   var r=recipeByName(st.plan[i][m]);
-  if(!r){c.link.hidden=true;c.note.hidden=true;c.note.textContent='';return;}
+  if(!r){c.link.hidden=true;c.note.hidden=true;c.note.textContent='';c.how.hidden=true;c.how.open=false;return;}
   var miss=missingOf(r);
   c.link.hidden=false; c.link.href=ytUrl(r.n);
+  c.how.hidden=false; if(c.how.open) fillHow(c,r.n);
   c.note.hidden=false; c.note.className='need'+(miss.length?'':' ok');
   c.note.textContent=miss.length?('Need: '+miss.join(', ')):'You have everything';
 }
@@ -1096,10 +1104,13 @@ function renderPlan(){
     var sel=h('select',{id:id});
     var link=h('a',{class:'yt',target:'_blank',rel:'noopener noreferrer',text:'Watch video',hidden:true});
     var note=h('p',{class:'need',hidden:true});
-    sel.addEventListener('change',function(){st.plan[i][m]=sel.value;save();updateCell(i,m);setCount(i);renderShop();renderPrep();});
-    planRows[i][m]={sel:sel,link:link,note:note};
+    var body=h('div',{class:'howb'});
+    var how=h('details',{class:'how',hidden:true},h('summary',{text:'Ingredients and steps'}),body);
+    how.addEventListener('toggle',function(){var c=planRows[i][m]; if(how.open&&c&&st.plan[i][m]) fillHow(c,st.plan[i][m]);});
+    sel.addEventListener('change',function(){st.plan[i][m]=sel.value;save();updateCell(i,m);if(sel.value)planRows[i][m].how.open=true;setCount(i);renderShop();renderPrep();});
+    planRows[i][m]={sel:sel,link:link,note:note,how:how,body:body};
     fillOptions(sel,m,st.plan[i][m]); updateCell(i,m);
-    return h('div',{class:'meal'},h('label',{for:id,text:label}),sel,note,link);
+    return h('div',{class:'meal'},h('label',{for:id,text:label}),sel,note,how,link);
   }
   DAYS.forEach(function(d,i){
     planRows.push([]);
@@ -1187,8 +1198,8 @@ var RL={
  Malayalam:['ആവശ്യമായ സാധനങ്ങൾ','തയ്യാറാക്കുന്ന വിധം (കഴിഞ്ഞ ഘട്ടം ടാപ്പ് ചെയ്യുക)','നുറുങ്ങ്'],
  Kannada:['ಬೇಕಾದ ಸಾಮಗ್ರಿಗಳು','ಮಾಡುವ ವಿಧಾನ (ಮುಗಿದ ಹಂತವನ್ನು ಒತ್ತಿ)','ಸಲಹೆ']
 };
-function rShow(d){
-  var box=$('rBody'); box.textContent='';
+function rShow(d,target){
+  var box=target||$('rBody'); box.textContent='';
   var L=RL[d.lang]||['Ingredients','Method (tap a step when done)','Tip'];
   box.append((d.lang&&d.lang!=='English')?null:h('p',{class:'sub',text:'For '+d.servings+(d.servings===1?' person':' people')+'. Change "People eating" in the planner to rescale.'}),h('h3',{text:L[0]}));
   var ul=h('ul',{class:'r-ings'});
@@ -1379,6 +1390,29 @@ function initOwn(){
   });
   ownRefresh();
 }
+
+/* ---------- Recipe inside the planner ---------- */
+function recipeData(name){
+  var key=name+'|'+st.people+'|'+st.lang;
+  if(rcache[key]) return rcache[key];
+  if(st.lang==='Tamil'&&TA[name]&&FULL[name]){
+    var F=FULL[name], T=TA[name];
+    return {lang:'Tamil',servings:st.people,ingredients:F.i.map(function(x,k){return {item:T.i[k],qty:fq(x[1],x[2],true)};}),steps:T.s,tip:T.t};
+  }
+  var br=recipeByName(name); return br?builtIn(br):null;
+}
+function fillHow(c,name){
+  var d=recipeData(name); c.body.textContent='';
+  if(!d) return;
+  rShow(d,c.body);
+  c.body.append(h('button',{class:'btn ghost',type:'button',style:'margin-top:10px',text:'Full recipe',onclick:function(){openRecipe(name);}}));
+}
+function refillOpen(){
+  planRows.forEach(function(row,i){row.forEach(function(c,m){if(c&&c.how&&c.how.open&&st.plan[i][m]) fillHow(c,st.plan[i][m]);});});
+}
+$('lang').addEventListener('change',refillOpen);
+$('people').addEventListener('input',function(){setTimeout(refillOpen,0);});
+TAMAP['Ingredients and steps']='பொருட்களும் செய்முறையும்';
 
 /* ---------- Share / print plan ---------- */
 function planText(){
