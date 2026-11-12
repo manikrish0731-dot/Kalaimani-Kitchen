@@ -198,6 +198,26 @@ details.day[open]>summary{border-bottom:1px solid var(--line);margin-bottom:4px}
 .mg .meals{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
 .meal label{font-size:13px;letter-spacing:0;text-transform:none;font-weight:600;color:var(--muted)}
 .mg .meal .yt{font-size:13px;padding:4px 10px}
+/* ---- Own dishes, prep, print ---- */
+.own{margin-top:20px;padding-top:16px;border-top:1px solid var(--line)}
+.own summary{font-weight:700;font-size:18px;cursor:pointer}
+.ownf{display:flex;flex-direction:column;gap:12px;margin-top:12px}
+.ownf label{display:flex;flex-direction:column;gap:4px;font-size:14px;font-weight:600;color:var(--muted)}
+.ownf label.ck{flex-direction:row;align-items:center;gap:8px}
+.ownf input[type=text],.ownf input[type=number],.ownf select{width:100%}
+.ownf textarea{width:100%;border:1px solid var(--line);border-radius:14px;padding:12px;font:inherit;background:var(--surface);color:var(--ink)}
+.ownrow{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line)}
+.prep{margin-top:14px;padding:14px 16px;border-radius:16px;background:var(--tint);border:1px solid var(--line)}
+.prep h3{margin:0 0 4px;font-size:17px}
+.prep ul{margin:8px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:8px}
+@media print{
+  .tabbar,header,.side,main>section:first-child,.sum,#results,.ai-box,.note,.plan-box .btn,.plan-box .photo-row,#planStatus,a.yt,.meal .need{display:none!important}
+  main,.plan-box{display:block!important}
+  .plan-box{border:0;margin:0;padding:0}
+  body{background:#fff;padding:0}
+  select{appearance:none;-webkit-appearance:none;border:0;padding:0;background:none;min-height:0;font-weight:600}
+  .mg{break-inside:avoid;background:none;border:1px solid #ccc}
+}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 
@@ -277,6 +297,24 @@ details.day[open]>summary{border-bottom:1px solid var(--line);margin-bottom:4px}
         <div class="photo-row"><button class="btn ghost" id="bkSave" type="button">Back up my data</button><label class="btn ghost" for="bkLoad" style="cursor:pointer">Restore backup</label><input type="file" id="bkLoad" accept=".json,application/json" hidden><span class="status" id="bkStatus" style="margin:0"></span></div>
         <button class="btn jump" id="jump" type="button">See what I can cook</button>
       </section>
+      <section class="own" aria-labelledby="h-own">
+        <details>
+          <summary id="h-own">Add your own dish</summary>
+          <form id="ownForm" class="ownf">
+            <label>Dish name <input type="text" id="ownName" required maxlength="60"></label>
+            <label>Type <select id="ownSlot"><option value="main">Main course</option><option value="side">Side dish</option><option value="gravy">Gravy</option><option value="dessert">Dessert</option></select></label>
+            <label>Ingredients (comma separated) <input type="text" id="ownIng" required placeholder="e.g. rice, onion, tomato"></label>
+            <label>Optional extras <input type="text" id="ownOpt" placeholder="e.g. coriander, lemon"></label>
+            <label>Minutes to cook <input type="number" id="ownMin" min="5" max="240" value="30" inputmode="numeric"></label>
+            <label class="ck"><input type="checkbox" id="ownVeg" checked> Vegetarian</label>
+            <label class="ck"><input type="checkbox" id="ownBf"> Suits breakfast</label>
+            <label>Steps (one per line) <textarea id="ownSteps" rows="5" required></textarea></label>
+            <button class="btn" type="submit">Save dish</button>
+            <p class="status" id="ownStatus"></p>
+          </form>
+          <div id="ownList"></div>
+        </details>
+      </section>
     </div>
 
     <main id="main" tabindex="-1" style="outline:none">
@@ -297,8 +335,11 @@ details.day[open]>summary{border-bottom:1px solid var(--line);margin-bottom:4px}
           <label class="people" for="people">People eating <input type="number" id="people" min="1" max="20" value="4" inputmode="numeric"></label>
           <button class="btn" id="planFill" type="button">Fill the week for me</button>
           <button class="btn ghost" id="planClear" type="button">Clear plan</button>
+          <button class="btn ghost" id="planShare" type="button">Share plan on WhatsApp</button>
+          <button class="btn ghost" id="planPrint" type="button">Print plan</button>
         </div>
         <p class="status" id="planStatus"></p>
+        <div class="prep" id="prepBox" hidden></div>
         <div class="plan" id="plan"></div>
         <div class="shop" id="shop" hidden>
           <h3>Shopping list</h3>
@@ -892,6 +933,7 @@ function missingOf(r){return r.i.filter(function(x){return !pantry.has(x);});}
 var DESS=new Set(['Rava Kesari','Rice Kheer','Semiya Payasam','Bread Halwa','Banana Milkshake']);
 function cls(r){
   var n=r.n;
+  if(r.slot) return r.slot;
   if(DESS.has(n)) return 'dessert';
   if(/poriyal|fry|chutney|salad|bhurji|podimas|omelette|65|pepper|bruschetta/i.test(n)) return 'side';
   if(/curry|masala|kurma|sambar|rasam|dal |tadka|gravy|kootu|pappu|masiyal|chettinad|roast|palak|chana/i.test(n)) return 'gravy';
@@ -1008,7 +1050,7 @@ function renderPlan(){
     var sel=h('select',{id:id});
     var link=h('a',{class:'yt',target:'_blank',rel:'noopener noreferrer',text:'Watch video',hidden:true});
     var note=h('p',{class:'need',hidden:true});
-    sel.addEventListener('change',function(){st.plan[i][m]=sel.value;save();updateCell(i,m);setCount(i);renderShop();});
+    sel.addEventListener('change',function(){st.plan[i][m]=sel.value;save();updateCell(i,m);setCount(i);renderShop();renderPrep();});
     planRows[i][m]={sel:sel,link:link,note:note};
     fillOptions(sel,m,st.plan[i][m]); updateCell(i,m);
     return h('div',{class:'meal'},h('label',{for:id,text:label}),sel,note,link);
@@ -1026,7 +1068,7 @@ function renderPlan(){
     day.append(h('div',{class:'mg'},h('div',{class:'mgh'},h('span',{text:'🍮'}),h('span',{text:'Extra'})),h('div',{class:'meals'},cell(i,9,'Dessert'))));
     box.append(day);
   });
-  renderShop();
+  renderShop(); renderPrep();
 }
 function shuffle(a){for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t;}return a;}
 function planScore(n){
@@ -1119,6 +1161,7 @@ function rShow(d){
 }
 function builtIn(r){
   var n=st.people, F=FULL[r.n];
+  if(r.s&&r.s.length) return {servings:n,ingredients:r.i.concat(r.o).map(function(x,k){return {item:x,qty:k<r.i.length?'':'optional'};}),steps:r.s,tip:''};
   if(F) return {servings:n,ingredients:F.i.map(function(x){return {item:x[0],qty:fq(x[1],x[2])};}),steps:F.s,tip:F.t||''};
   function row(x,opt){var a=AMT[x];return {item:x,qty:a?fmtAmt(x,a[0]*n).replace(x+' ~ ',''):(opt?'optional':'as needed')};}
   var ings=r.i.map(function(x){return row(x,false);}).concat(r.o.map(function(x){return row(x,true);}));
@@ -1250,9 +1293,108 @@ function setTab(t){
 Array.prototype.forEach.call(document.querySelectorAll('.tabbar button'),function(b){b.addEventListener('click',function(){setTab(b.getAttribute('data-tab'));});});
 setTab('cook'); applyUI();
 
+/* ---------- Own dishes ---------- */
+function addCustomToRecipes(c){
+  RECIPES.push({n:c.n,c:'Home',t:c.t,v:c.v,i:c.i,o:c.o,h:c.s.join('. '),s:c.s,slot:c.slot,custom:true});
+  if(c.b) BREAKFAST.add(c.n);
+}
+function loadOwn(){
+  if(!Array.isArray(st.custom)) st.custom=[];
+  st.custom=st.custom.filter(function(c){return c&&c.n&&Array.isArray(c.i)&&Array.isArray(c.o)&&Array.isArray(c.s);});
+  st.custom.forEach(addCustomToRecipes);
+}
+function ownRefresh(){
+  var sel=$('cuisine');
+  if(!Array.prototype.some.call(sel.options,function(o){return o.value==='Home';})) sel.append(h('option',{value:'Home',text:'Home'}));
+  var box=$('ownList'); box.textContent='';
+  st.custom.forEach(function(c,k){
+    box.append(h('div',{class:'ownrow'},h('span',{text:c.n}),h('button',{class:'btn ghost',type:'button',text:'Remove',onclick:function(){
+      var i; st.custom.splice(k,1);
+      for(i=0;i<RECIPES.length;i++){if(RECIPES[i].custom&&RECIPES[i].n===c.n){RECIPES.splice(i,1);break;}}
+      BREAKFAST.delete(c.n);
+      st.plan.forEach(function(row){row.forEach(function(x,j){if(x===c.n)row[j]='';});});
+      save(); ownRefresh(); renderResults(); renderPlan();
+    }})));
+  });
+}
+function initOwn(){
+  $('ownForm').addEventListener('submit',function(e){
+    e.preventDefault();
+    var msg=$('ownStatus'), name=$('ownName').value.trim().slice(0,60);
+    var steps=$('ownSteps').value.split('\n').map(function(x){return x.trim();}).filter(Boolean).slice(0,30);
+    function items(v){return Array.from(new Set(v.split(',').map(norm).filter(Boolean)));}
+    var ing=items($('ownIng').value), opt=items($('ownOpt').value).filter(function(x){return ing.indexOf(x)<0;});
+    if(!name||!ing.length||!steps.length){msg.textContent='Please add a name, at least one ingredient and the steps.';return;}
+    if(recipeByName(name)){msg.textContent='A dish with this name already exists. Please use a different name.';return;}
+    var c={n:name,t:Math.min(240,Math.max(5,Math.round(Number($('ownMin').value))||30)),v:$('ownVeg').checked?1:0,i:ing,o:opt,s:steps,slot:$('ownSlot').value,b:$('ownBf').checked};
+    st.custom.push(c); addCustomToRecipes(c); save();
+    $('ownForm').reset(); msg.textContent='Saved. It now appears in your dishes and in the planner.';
+    ownRefresh(); renderResults(); renderPlan();
+  });
+  ownRefresh();
+}
+
+/* ---------- Share / print plan ---------- */
+function planText(){
+  var out=['Weekly plan - Kalaimani Kitchen'];
+  DAYS.forEach(function(d,i){
+    var lines=[];
+    MEALS.forEach(function(mn,mi){
+      var p=[0,1,2].map(function(k){return st.plan[i][mi*3+k];}).filter(Boolean);
+      if(p.length) lines.push(mn+': '+p.join(', '));
+    });
+    if(st.plan[i][9]) lines.push('Dessert: '+st.plan[i][9]);
+    if(lines.length) out.push('',d,lines.join('\n'));
+  });
+  return out.length>1?out.join('\n'):'';
+}
+var reopen=[];
+function initShare(){
+  $('planShare').addEventListener('click',function(){
+    var t=planText();
+    if(!t){$('planStatus').textContent='Plan some dishes first, then share.';return;}
+    $('planStatus').textContent='';
+    window.open('https://wa.me/?text='+encodeURIComponent(t),'_blank','noopener');
+  });
+  $('planPrint').addEventListener('click',function(){
+    if(!planText()){$('planStatus').textContent='Plan some dishes first, then print.';return;}
+    $('planStatus').textContent=''; window.print();
+  });
+  window.addEventListener('beforeprint',function(){
+    Array.prototype.forEach.call(document.querySelectorAll('details.day'),function(d){if(!d.open){reopen.push(d);d.open=true;}});
+  });
+  window.addEventListener('afterprint',function(){reopen.forEach(function(d){d.open=false;});reopen=[];});
+}
+
+/* ---------- Tomorrow's prep ---------- */
+var PREP=[
+ [/biryani|pulao/i,'Marinate the meat or vegetables in the fridge overnight. Wash and soak the rice 30 minutes before cooking.'],
+ [/dosa|idli|uttapam|appam|adai/i,'If there is no batter ready, soak rice and urad dal tonight, then grind and ferment overnight.'],
+ [/sambar|rasam|kuzhambu/i,'Soak the tamarind in warm water, and cook the dal ahead if you can.'],
+ [/rajma|chana|chole|chickpea/i,'Soak the beans or chickpeas overnight, at least 8 hours.']
+];
+function renderPrep(){
+  var box=$('prepBox'), ti=((new Date().getDay()+6)%7+1)%7, seen={}, items=[];
+  st.plan[ti].forEach(function(name){
+    if(!name||seen[name]) return; seen[name]=1;
+    var r=recipeByName(name); if(!r) return;
+    var tips=[];
+    PREP.forEach(function(p){if(p[0].test(r.n)) tips.push(p[1]);});
+    var meat=r.i.filter(function(x){return /^(chicken|mutton|beef|fish|shrimp|pork)$/.test(x);});
+    if(meat.length) tips.push('Take the '+meat.join(' and ')+' out of the freezer to thaw, or buy it fresh.');
+    var miss=missingOf(r); if(miss.length) tips.push('Buy tonight: '+miss.join(', ')+'.');
+    if(tips.length) items.push([name,tips]);
+  });
+  box.textContent=''; box.hidden=!items.length; if(!items.length) return;
+  box.append(h('h3',{text:'Get ready tonight'}),h('span',{class:'cnt',text:'For tomorrow, '+DAYS[ti]}));
+  var ul=h('ul'); items.forEach(function(x){ul.append(h('li',{},h('strong',{text:x[0]+': '}),x[1].join(' ')));}); box.append(ul);
+}
+TAMAP['Add your own dish']='உங்கள் சொந்த உணவைச் சேர்'; TAMAP['Save dish']='உணவைச் சேமி'; TAMAP['Remove']='நீக்கு'; TAMAP['Dish name']='உணவின் பெயர்'; TAMAP['Type']='வகை'; TAMAP['Vegetarian']='சைவம்'; TAMAP['Suits breakfast']='காலை உணவுக்கு ஏற்றது';
+TAMAP['Share plan on WhatsApp']='திட்டத்தை வாட்ஸ்அப்பில் பகிர்'; TAMAP['Print plan']='திட்டத்தை அச்சிடு'; TAMAP['Get ready tonight']='இன்று இரவு தயார் செய்யுங்கள்';
+
 /* ---------- Boot ---------- */
 $('today').textContent=new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'});
-buildGroups(); initPrefs(); initFinder(); initPhoto(); initList(); initIdeas(); initPlan();
+loadOwn(); buildGroups(); initPrefs(); initFinder(); initPhoto(); initList(); initIdeas(); initPlan(); initOwn(); initShare();
 $('addForm').addEventListener('submit',function(e){
   e.preventDefault();
   var inp=$('addInput'); addItems(inp.value); inp.value='';
