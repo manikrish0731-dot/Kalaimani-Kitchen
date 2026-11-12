@@ -185,6 +185,19 @@ input[type=text],select{border-radius:14px;min-height:46px}
   body[data-tab="plan"] .plan-box{margin-top:0;border-top:0;padding-top:0}
   dialog{width:100%;max-width:100%;margin:auto 0 0;border-radius:22px 22px 0 0;max-height:92vh}
 }
+/* ---- Tidy planner ---- */
+.day{padding:0 16px}
+details.day>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:16px 0;margin:0;font-size:18px}
+details.day>summary::-webkit-details-marker{display:none}
+details.day>summary::after{content:"\25BE";margin-left:auto;color:var(--muted)}
+details.day[open]>summary::after{content:"\25B4"}
+details.day[open]>summary{border-bottom:1px solid var(--line);margin-bottom:4px}
+.cnt{font-size:14px;font-weight:500;color:var(--muted)}
+.mg{background:var(--bg);border-radius:14px;padding:12px 14px;margin:12px 0}
+.mgh{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:700;letter-spacing:0;text-transform:none;color:var(--ink);margin-bottom:10px}
+.mg .meals{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+.meal label{font-size:13px;letter-spacing:0;text-transform:none;font-weight:600;color:var(--muted)}
+.mg .meal .yt{font-size:13px;padding:4px 10px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 
@@ -982,28 +995,35 @@ function renderShop(){
   });
   updateShopMeta();
 }
+var planCnt=[];
+function setCount(i){
+  var n=st.plan[i].filter(Boolean).length;
+  if(planCnt[i]) planCnt[i].textContent=n?(n+' planned'):'nothing planned';
+}
 function renderPlan(){
-  var box=$('plan'); box.textContent=''; planRows=[];
+  var box=$('plan'); box.textContent=''; planRows=[]; planCnt=[];
   var today=(new Date().getDay()+6)%7, SLOTS=['Main course','Side dish','Gravy'];
   function cell(i,m,label){
     var id='plan-'+i+'-'+m;
     var sel=h('select',{id:id});
     var link=h('a',{class:'yt',target:'_blank',rel:'noopener noreferrer',text:'Watch video',hidden:true});
     var note=h('p',{class:'need',hidden:true});
-    sel.addEventListener('change',function(){st.plan[i][m]=sel.value;save();updateCell(i,m);renderShop();});
+    sel.addEventListener('change',function(){st.plan[i][m]=sel.value;save();updateCell(i,m);setCount(i);renderShop();});
     planRows[i][m]={sel:sel,link:link,note:note};
     fillOptions(sel,m,st.plan[i][m]); updateCell(i,m);
     return h('div',{class:'meal'},h('label',{for:id,text:label}),sel,note,link);
   }
   DAYS.forEach(function(d,i){
     planRows.push([]);
-    var day=h('div',{class:'day'},h('div',{class:'dn'},d,i===today?h('span',{class:'tag',text:'Today'}):null));
+    var cnt=h('span',{class:'cnt'}); planCnt[i]=cnt;
+    var day=h('details',{class:'day'},h('summary',{class:'dn'},d,i===today?h('span',{class:'tag',text:'Today'}):null,cnt));
+    day.open=(i===today); setCount(i);
     MEALS.forEach(function(mn,mi){
       var row=h('div',{class:'meals'});
       SLOTS.forEach(function(sn,k){row.append(cell(i,mi*3+k,sn));});
-      day.append(h('div',{class:'mg'},h('div',{class:'mgh',text:mn}),row));
+      day.append(h('div',{class:'mg'},h('div',{class:'mgh'},h('span',{text:['🌅','\u2600\uFE0F','🌙'][mi]}),h('span',{text:mn})),row));
     });
-    day.append(h('div',{class:'mg'},h('div',{class:'mgh',text:'Extra'}),h('div',{class:'meals'},cell(i,9,'Dessert'))));
+    day.append(h('div',{class:'mg'},h('div',{class:'mgh'},h('span',{text:'🍮'}),h('span',{text:'Extra'})),h('div',{class:'meals'},cell(i,9,'Dessert'))));
     box.append(day);
   });
   renderShop();
