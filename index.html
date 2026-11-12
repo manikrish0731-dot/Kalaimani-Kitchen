@@ -128,7 +128,9 @@ a.btn{text-decoration:none;display:inline-flex;align-items:center;justify-conten
 .day:first-child{border-top:0}
 .dn{font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px}
 .dn .tag{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);background:var(--tint);border-radius:999px;padding:2px 8px;font-weight:700}
-.meals{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.meals{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.mg{margin-top:14px}
+.mgh{font-weight:700;font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:6px}
 .meal{display:flex;flex-direction:column;gap:6px;min-width:0}
 .meal label{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
 .meal select{width:100%;min-width:0}
@@ -277,7 +279,7 @@ input[type=text],select{border-radius:14px;min-height:46px}
       <div id="results"></div>
       <section class="plan-box" aria-labelledby="h-plan">
         <h2 id="h-plan">Plan the week</h2>
-        <p class="sub">Pick breakfast, lunch and dinner for each day, plus a main dish, gravy, side dish and dessert if you like. The fill button does breakfast, lunch and dinner. The shopping list shows what is missing, with rough amounts for the number of people eating.</p>
+        <p class="sub">For every meal pick a main course, side dish and gravy, plus an optional dessert. The fill button fills all the meal slots for the week, but not desserts. The shopping list shows what is missing, with rough amounts for the number of people eating.</p>
         <div class="photo-row">
           <label class="people" for="people">People eating <input type="number" id="people" min="1" max="20" value="4" inputmode="numeric"></label>
           <button class="btn" id="planFill" type="button">Fill the week for me</button>
@@ -844,7 +846,7 @@ function initIdeas(){
 
 /* ---------- Weekly plan ---------- */
 var DAYS=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
-var MEALS=['Breakfast','Lunch','Dinner','Main dish','Gravy','Side dish','Dessert'];
+var MEALS=['Breakfast','Lunch','Dinner'];
 var BREAKFAST=new Set(['Upma','Poha','Masala Omelette','Bread Omelette','Egg Bhurji','Egg Podimas','Rava Dosa','Onion Uttapam','Ven Pongal','French Toast','French Omelette','Pancakes','Banana Pancakes','Grilled Cheese Sandwich','Spanish Tortilla','Miso Soup','Coconut Chutney','Tomato Chutney']);
 /* Rough amount per person for one serving of a dish: [amount, unit] */
 var AMT={
@@ -859,10 +861,14 @@ var AMT={
 };
 var planRows=[], shopList=[];
 function normalizePlan(p){
-  var out=[];
-  for(var i=0;i<7;i++){
+  var out=[], i, k;
+  for(i=0;i<7;i++){
     var d=p&&p[i], row=[];
-    for(var k=0;k<7;k++){row.push(Array.isArray(d)?String(d[k]||''):(typeof d==='string'&&k===2?d:''));}
+    for(k=0;k<10;k++) row.push('');
+    if(Array.isArray(d)){
+      if(d.length===10){for(k=0;k<10;k++) row[k]=String(d[k]||'');}
+      else{row[0]=String(d[0]||'');row[3]=String(d[1]||'');row[6]=String(d[2]||'');row[9]=String(d[6]||'');}
+    }else if(typeof d==='string') row[6]=d;
     out.push(row);
   }
   return out;
@@ -879,13 +885,13 @@ function cls(r){
   return 'main';
 }
 function mealPool(m){
-  var want=['main','gravy','side','dessert'];
+  if(m===9) return RECIPES.filter(function(r){return cls(r)==='dessert';});
+  var meal=Math.floor(m/3), t=['main','side','gravy'][m%3];
   return RECIPES.filter(function(r){
+    if(cls(r)!==t) return false;
     var b=BREAKFAST.has(r.n);
-    if(m>=3) return cls(r)===want[m-3];
-    if(m===0) return b;
-    if(m===1) return !b&&cls(r)!=='dessert';
-    return cls(r)!=='dessert';
+    if(t==='main'){if(meal===0) return b; if(meal===1) return !b;}
+    return true;
   });
 }
 function fillOptions(sel,m,current){
@@ -978,20 +984,27 @@ function renderShop(){
 }
 function renderPlan(){
   var box=$('plan'); box.textContent=''; planRows=[];
-  var today=(new Date().getDay()+6)%7;
+  var today=(new Date().getDay()+6)%7, SLOTS=['Main course','Side dish','Gravy'];
+  function cell(i,m,label){
+    var id='plan-'+i+'-'+m;
+    var sel=h('select',{id:id});
+    var link=h('a',{class:'yt',target:'_blank',rel:'noopener noreferrer',text:'Watch video',hidden:true});
+    var note=h('p',{class:'need',hidden:true});
+    sel.addEventListener('change',function(){st.plan[i][m]=sel.value;save();updateCell(i,m);renderShop();});
+    planRows[i][m]={sel:sel,link:link,note:note};
+    fillOptions(sel,m,st.plan[i][m]); updateCell(i,m);
+    return h('div',{class:'meal'},h('label',{for:id,text:label}),sel,note,link);
+  }
   DAYS.forEach(function(d,i){
-    var meals=h('div',{class:'meals'}); planRows.push([]);
-    MEALS.forEach(function(mn,m){
-      var id='plan-'+i+'-'+m;
-      var sel=h('select',{id:id});
-      var link=h('a',{class:'yt',target:'_blank',rel:'noopener noreferrer',text:'Watch video',hidden:true});
-      var note=h('p',{class:'need',hidden:true});
-      sel.addEventListener('change',function(){st.plan[i][m]=sel.value;save();updateCell(i,m);renderShop();});
-      meals.append(h('div',{class:'meal'},h('label',{for:id,text:mn}),sel,note,link));
-      planRows[i].push({sel:sel,link:link,note:note});
-      fillOptions(sel,m,st.plan[i][m]); updateCell(i,m);
+    planRows.push([]);
+    var day=h('div',{class:'day'},h('div',{class:'dn'},d,i===today?h('span',{class:'tag',text:'Today'}):null));
+    MEALS.forEach(function(mn,mi){
+      var row=h('div',{class:'meals'});
+      SLOTS.forEach(function(sn,k){row.append(cell(i,mi*3+k,sn));});
+      day.append(h('div',{class:'mg'},h('div',{class:'mgh',text:mn}),row));
     });
-    box.append(h('div',{class:'day'},h('div',{class:'dn'},d,i===today?h('span',{class:'tag',text:'Today'}):null),meals));
+    day.append(h('div',{class:'mg'},h('div',{class:'mgh',text:'Extra'}),h('div',{class:'meals'},cell(i,9,'Dessert'))));
+    box.append(day);
   });
   renderShop();
 }
@@ -1014,14 +1027,15 @@ function orderFor(m){
   return order;
 }
 function fillPlan(){
-  var orders=[orderFor(0),orderFor(1),orderFor(2)];
-  var used=new Set(), prev=['','',''], plan=blankPlan();
-  for(var d=0;d<7;d++){
-    for(var m=0;m<3;m++){
-      var order=orders[m], pick=null, k;
-      for(k=0;k<order.length;k++){if(!used.has(order[k].r.n)&&order[k].r.c!==prev[m]){pick=order[k];break;}}
-      if(!pick){for(k=0;k<order.length;k++){if(!used.has(order[k].r.n)){pick=order[k];break;}}}
-      if(pick){used.add(pick.r.n);prev[m]=pick.r.c;plan[d][m]=pick.r.n;}
+  var N=9, orders=[], used=[], prev=[], plan=blankPlan(), m, d, k;
+  for(m=0;m<N;m++){orders.push(orderFor(m));used.push(new Set());prev.push('');}
+  for(d=0;d<7;d++){
+    for(m=0;m<N;m++){
+      var order=orders[m], pick=null;
+      for(k=0;k<order.length;k++){if(!used[m].has(order[k].r.n)&&order[k].r.c!==prev[m]){pick=order[k];break;}}
+      if(!pick){for(k=0;k<order.length;k++){if(!used[m].has(order[k].r.n)){pick=order[k];break;}}}
+      if(!pick&&order.length) pick=order[d%order.length];
+      if(pick){used[m].add(pick.r.n);prev[m]=pick.r.c;plan[d][m]=pick.r.n;}
     }
   }
   st.plan=plan; save(); renderPlan();
@@ -1207,7 +1221,7 @@ $('lang').addEventListener('change',applyUI);
 applyUI();
 
 /* ---------- Bottom menu (phones) ---------- */
-TAMAP['Main dish']='முக்கிய உணவு'; TAMAP['Gravy']='குழம்பு / கிரேவி'; TAMAP['Side dish']='தொடு உணவு'; TAMAP['Dessert']='இனிப்பு'; TAMAP['Kitchen']='சமையலறை'; TAMAP['Cook']='சமையல்'; TAMAP['Plan']='திட்டம்';
+TAMAP['Main course']='முக்கிய உணவு'; TAMAP['Extra']='கூடுதல்'; TAMAP['Main dish']='முக்கிய உணவு'; TAMAP['Gravy']='குழம்பு / கிரேவி'; TAMAP['Side dish']='தொடு உணவு'; TAMAP['Dessert']='இனிப்பு'; TAMAP['Kitchen']='சமையலறை'; TAMAP['Cook']='சமையல்'; TAMAP['Plan']='திட்டம்';
 function setTab(t){
   document.body.setAttribute('data-tab',t);
   Array.prototype.forEach.call(document.querySelectorAll('.tabbar button'),function(b){b.setAttribute('aria-current',b.getAttribute('data-tab')===t?'page':'false');});
