@@ -211,7 +211,7 @@ details.day[open]>summary{border-bottom:1px solid var(--line);margin-bottom:4px}
 .prep h3{margin:0 0 4px;font-size:17px}
 .prep ul{margin:8px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:8px}
 @media print{
-  .tabbar,header,.side,main>section:first-child,.sum,#results,.ai-box,.note,.plan-box .btn,.plan-box .photo-row,#planStatus,a.yt,.meal .need{display:none!important}
+  .fab,.tabbar,header,.side,main>section:first-child,.sum,#results,.ai-box,.note,.plan-box .btn,.plan-box .photo-row,#planStatus,a.yt,.meal .need{display:none!important}
   main,.plan-box{display:block!important}
   .plan-box{border:0;margin:0;padding:0}
   body{background:#fff;padding:0}
@@ -270,6 +270,25 @@ dialog::backdrop{background:rgba(10,20,14,.55);backdrop-filter:blur(3px);animati
 .howb h3{font-size:15px;margin:10px 0 4px}
 .howb .r-steps{font-size:15px}
 .meal:has(.how[open]){grid-column:1/-1}
+/* ---- Detailed recipe ---- */
+.r-chips{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 4px}
+.r-chip{background:var(--tint);color:var(--accent);border-radius:999px;padding:4px 12px;font-size:14px;font-weight:600}
+.r-part{font:inherit;font-weight:700;font-size:16px;margin:18px 0 8px;color:var(--accent)}
+.r-tw{overflow-x:auto}
+.r-tbl{border-collapse:collapse;width:100%;font-size:15px}
+.r-tbl th,.r-tbl td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+.r-tbl th{background:var(--bg)}
+/* ---- Assistant ---- */
+.fab{position:fixed;right:16px;bottom:calc(24px + env(safe-area-inset-bottom,0px));z-index:19;display:flex;align-items:center;gap:8px;border:0;border-radius:999px;padding:12px 18px;font:inherit;font-weight:700;color:#fff;background:linear-gradient(135deg,#1E7A4C,#2FA36B);box-shadow:0 10px 24px rgba(30,122,76,.4);cursor:pointer;transition:transform .15s}
+.fab:hover{transform:translateY(-2px)}
+.fab .ic{font-size:20px}
+@media (max-width:919px){.fab{bottom:calc(96px + env(safe-area-inset-bottom,0px))}}
+.aglog{display:flex;flex-direction:column;gap:10px;max-height:46vh;overflow:auto;margin:10px 0}
+.agm{max-width:88%;padding:10px 14px;border-radius:16px;white-space:pre-wrap;animation:rise .3s both}
+.agm.me{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:4px}
+.agm.bot{align-self:flex-start;background:var(--bg);border-bottom-left-radius:4px}
+.agform{display:flex;gap:8px;margin-top:10px}
+.agform input{flex:1}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -308,7 +327,7 @@ dialog::backdrop{background:rgba(10,20,14,.55);backdrop-filter:blur(3px);animati
 
       <section aria-labelledby="h-photo">
         <h2 id="h-photo">Fridge photo or list</h2>
-        <p class="sub">Upload a photo of your fridge or shelf and Claude reads the ingredients. Check the result, then remove anything wrong.</p>
+        <p class="sub">Upload a photo of your fridge or shelf and AI reads the ingredients. Check the result, then remove anything wrong.</p>
         <div id="photoOn" hidden>
           <label class="people" for="passcode" style="margin-top:12px">Family passcode <input type="password" id="passcode" autocomplete="off" style="width:160px"></label>
           <div class="photo-row">
@@ -403,8 +422,8 @@ dialog::backdrop{background:rgba(10,20,14,.55);backdrop-filter:blur(3px);animati
         </div>
       </section>
       <div class="ai-box" id="aiBox" hidden>
-        <h2>More ideas from Claude</h2>
-        <p class="sub">Claude suggests extra dishes based on your list and preferences. These come from Claude, not from the built-in recipe list.</p>
+        <h2>More ideas from AI</h2>
+        <p class="sub">AI suggests extra dishes based on your list and preferences. These come from AI, not from the built-in recipe list.</p>
         <div class="photo-row"><button class="btn" id="aiBtn" type="button">Suggest more dishes</button><button class="btn ghost" id="aiStop" type="button" hidden>Stop</button></div>
         <p class="status" id="aiStatus"></p>
         <div class="grid" id="aiGrid"></div>
@@ -415,6 +434,10 @@ dialog::backdrop{background:rgba(10,20,14,.55);backdrop-filter:blur(3px);animati
 </div>
 
 <dialog id="rDlg" aria-labelledby="rTitle"><div class="r-head"><h2 id="rTitle"></h2><button class="btn ghost" id="rClose" type="button">Close</button></div><p class="status" id="rSt"></p><div id="rBody"></div></dialog>
+<button type="button" class="fab" id="askFab"><span class="ic">💬</span><span>Ask</span></button>
+<dialog id="agDlg" aria-labelledby="agTitle"><div class="r-head"><h2 id="agTitle">Kitchen assistant</h2><button class="btn ghost" id="agClose" type="button">Close</button></div>
+<div id="agLog" class="aglog" aria-live="polite"></div><div class="chips" id="agSug"></div>
+<form id="agForm" class="agform"><input type="text" id="agIn" maxlength="500" placeholder="Ask me to plan your week, or what to cook"><button class="btn" type="submit">Send</button></form></dialog>
 
 <script>
 (function(){
@@ -735,7 +758,7 @@ function cookedLine(n){
 function favFirst(l){return l.slice().sort(function(a,b){return (st.fav.indexOf(b.n)>=0)-(st.fav.indexOf(a.n)>=0);});}
 function cardEl(d){
   var missN=d.miss.length;
-  var pill=h('span',{class:'pill '+(d.ai?'ai':(missN?'warn':'ok')),text:d.ai?'Idea from Claude':(missN?('Need '+missN+' more'):'You have everything')});
+  var pill=h('span',{class:'pill '+(d.ai?'ai':(missN?'warn':'ok')),text:d.ai?'Idea from AI':(missN?('Need '+missN+' more'):'You have everything')});
   var vm=d.v===1?h('span',{class:'vm veg',role:'img','aria-label':'Vegetarian',title:'Vegetarian'}):
          d.v===0?h('span',{class:'vm nonveg',role:'img','aria-label':'Contains egg, meat or fish',title:'Contains egg, meat or fish'}):null;
   var ings=h('div',{class:'ings'});
@@ -1187,7 +1210,7 @@ function initPlan(){
   });
 }
 
-/* ---------- Full recipe (written by Claude on demand, cached on this device) ---------- */
+/* ---------- Full recipe (written by AI on demand, cached on this device) ---------- */
 var rcache={}, rCtl=null, wake=null;
 try{rcache=JSON.parse(localStorage.getItem('kk-recipes')||'{}')||{};}catch(e){}
 function rSave(){var k=Object.keys(rcache);if(k.length>40)delete rcache[k[0]];try{localStorage.setItem('kk-recipes',JSON.stringify(rcache));}catch(e){}}
@@ -1200,6 +1223,7 @@ var RL={
 };
 function rShow(d,target){
   var box=target||$('rBody'); box.textContent='';
+  if(d.parts){rRich(d,box);return;}
   var L=RL[d.lang]||['Ingredients','Method (tap a step when done)','Tip'];
   box.append((d.lang&&d.lang!=='English')?null:h('p',{class:'sub',text:'For '+d.servings+(d.servings===1?' person':' people')+'. Change "People eating" in the planner to rescale.'}),h('h3',{text:L[0]}));
   var ul=h('ul',{class:'r-ings'});
@@ -1230,7 +1254,7 @@ function builtIn(r){
   return {servings:n,ingredients:ings,steps:steps,tip:r.o.length?'Also good with: '+r.o.join(', ')+'.':''};
 }
 function rMore(name,b){
-  $('rBody').append(h('button',{class:'btn ghost',type:'button',style:'margin-top:14px',text:st.lang==='English'?'Get a more detailed version (uses Claude)':'Show in '+st.lang+' (uses Claude)',onclick:function(){rFetch(name,b);}}));
+  $('rBody').append(h('button',{class:'btn ghost',type:'button',style:'margin-top:14px',text:st.lang==='English'?'Get the full detailed recipe (uses AI)':'Detailed recipe in '+st.lang+' (uses AI)',onclick:function(){rFetch(name,b);}}));
 }
 async function rFetch(name,base){
   var msg=$('rSt'), key=name+'|'+st.people+'|'+st.lang;
@@ -1239,7 +1263,7 @@ async function rFetch(name,base){
   rCtl=new AbortController();
   try{
     var out=await callApi('recipe',{name:name,servings:st.people,lang:st.lang,base:base?JSON.stringify(base):''},rCtl.signal);
-    if(!out.recipe||!out.recipe.steps||!out.recipe.steps.length) throw {code:'upstream_error'};
+    if(!out.recipe||!((out.recipe.parts&&out.recipe.parts.length)||(out.recipe.steps&&out.recipe.steps.length))) throw {code:'upstream_error'};
     out.recipe.lang=st.lang; rcache[key]=out.recipe; rSave(); msg.textContent=''; rShow(out.recipe);
   }catch(e){msg.textContent=isCancel(e)?'':errCopy(e);}
   finally{rCtl=null;}
@@ -1250,6 +1274,7 @@ async function openRecipe(name){
   if(!dlg.open) dlg.showModal();
   try{if(navigator.wakeLock) wake=await navigator.wakeLock.request('screen');}catch(e){}
   if(rcache[key]){rShow(rcache[key]);return;}
+  if(RICH[name]&&st.lang==='English'){rShow(RICH[name]);return;}
   if(st.lang==='Tamil'&&TA[name]&&FULL[name]){
     var F=FULL[name], T=TA[name];
     rShow({lang:'Tamil',servings:st.people,ingredients:F.i.map(function(x,k){return {item:T.i[k],qty:fq(x[1],x[2],true)};}),steps:T.s,tip:T.t});
@@ -1297,7 +1322,7 @@ var TAMAP={
 'Video language':'வீடியோ மொழி','See what I can cook':'என்ன சமைக்கலாம் என்று பார்','Back up my data':'தரவைக் காப்பு எடு','Restore backup':'காப்பை மீட்டெடு',
 'Looking for a specific dish?':'குறிப்பிட்ட உணவைத் தேடுகிறீர்களா?','Search on YouTube':'யூடியூப்பில் தேடு','Plan the week':'வாரத்தைத் திட்டமிடு','People eating':'சாப்பிடுபவர்கள்',
 'Fill the week for me':'எனக்காக வாரத்தை நிரப்பு','Clear plan':'திட்டத்தை அழி','Shopping list':'வாங்க வேண்டிய பட்டியல்','Add ticked items to my kitchen':'குறித்தவற்றை என் சமையலறையில் சேர்','Copy list':'பட்டியலை நகலெடு','Send on WhatsApp':'வாட்ஸ்அப்பில் அனுப்பு',
-'More ideas from Claude':'Claude-இன் மேலும் யோசனைகள்','Suggest more dishes':'மேலும் உணவுகளைப் பரிந்துரை',
+'More ideas from AI':'AI-இன் மேலும் யோசனைகள்','Suggest more dishes':'மேலும் உணவுகளைப் பரிந்துரை',
 'Monday':'திங்கள்','Tuesday':'செவ்வாய்','Wednesday':'புதன்','Thursday':'வியாழன்','Friday':'வெள்ளி','Saturday':'சனி','Sunday':'ஞாயிறு','Today':'இன்று','Breakfast':'காலை உணவு','Lunch':'மதிய உணவு','Dinner':'இரவு உணவு','Not planned':'திட்டமில்லை',
 'Ready to cook now':'இப்போது சமைக்கத் தயார்','One item away':'ஒரு பொருள் மட்டும் குறைவு','Two or three items away':'இரண்டு மூன்று பொருட்கள் குறைவு','Full recipe':'முழு செய்முறை','Cooked it':'சமைத்தேன்','Watch on YouTube':'யூடியூப்பில் பார்','Watch video':'வீடியோ பார்','You have everything':'எல்லாம் உள்ளது','\u2661 Save':'\u2661 சேமி','\u2665 Saved':'\u2665 சேமித்தது','Close':'மூடு',
 'onion':'வெங்காயம்','tomato':'தக்காளி','potato':'உருளைக்கிழங்கு','carrot':'கேரட்','cauliflower':'காலிஃப்ளவர்','cabbage':'முட்டைக்கோஸ்','spinach':'கீரை','peas':'பட்டாணி','green beans':'பீன்ஸ்','cucumber':'வெள்ளரிக்காய்','mushroom':'காளான்','eggplant':'கத்தரிக்காய்','beetroot':'பீட்ரூட்','okra':'வெண்டைக்காய்','green chili':'பச்சை மிளகாய்','lemon':'எலுமிச்சை','garlic':'பூண்டு','ginger':'இஞ்சி',
@@ -1391,10 +1416,63 @@ function initOwn(){
   ownRefresh();
 }
 
+/* ---------- Detailed recipe format ---------- */
+function tickList(steps){
+  var ol=h('ol',{class:'r-steps'});
+  steps.forEach(function(t){
+    var li=h('li',{text:t,tabindex:'0',role:'button'});
+    function tg(){li.classList.toggle('done');}
+    li.addEventListener('click',tg);
+    li.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();tg();}});
+    ol.append(li);
+  });
+  return ol;
+}
+function tbl(head,rows){
+  var tb=h('tbody'); rows.forEach(function(r){tb.append(h('tr',{},h('td',{text:r[0]}),h('td',{text:r[1]})));});
+  return h('div',{class:'r-tw'},h('table',{class:'r-tbl'},h('thead',{},h('tr',{},h('th',{text:head[0]}),h('th',{text:head[1]}))),tb));
+}
+function rRich(d,box){
+  var i=d.info||{}, chips=h('div',{class:'r-chips'});
+  [i.servings&&('Serves '+i.servings),i.prep&&('Prep '+i.prep),i.cook&&('Cook '+i.cook)].forEach(function(t){if(t) chips.append(h('span',{class:'r-chip',text:t}));});
+  box.append(chips);
+  (d.groups||[]).forEach(function(g){
+    var ul=h('ul',{class:'r-ings'});
+    g.items.forEach(function(x){ul.append(h('li',{},x.qty?h('strong',{text:x.qty+' '}):null,x.item));});
+    box.append(h('h3',{text:g.title}),ul);
+  });
+  d.parts.forEach(function(pt,k){box.append(h('h4',{class:'r-part',text:(k+1)+'. '+pt.title}),tickList(pt.steps));});
+  if(d.mistakes&&d.mistakes.length) box.append(h('h3',{text:'Common mistakes to avoid'}),tbl(['Mistake','Result'],d.mistakes));
+  if(d.timeline&&d.timeline.length) box.append(h('h3',{text:'Cooking schedule'}),tbl(['Time','Activity'],d.timeline));
+  if(d.tip) box.append(h('p',{class:'also',text:d.tip}));
+}
+var RICH={
+'Chicken Biryani':{info:{servings:'4 people (750 g chicken, 500 g rice)',prep:'40 minutes',cook:'35 to 45 minutes'},
+ groups:[
+  {title:'Main ingredients',items:[['Chicken with bone','750 g'],['Seeraga samba rice','500 g'],['Onion','300 g (3 medium)'],['Tomato','200 g (2 medium)'],['Green chilli','4'],['Thick curd','100 g'],['Ginger-garlic paste','40 g'],['Mint leaves','30 g'],['Coriander leaves','30 g'],['Lemon juice','1 tbsp'],['Cooking oil','100 ml'],['Ghee','30 ml'],['Salt','12 to 15 g, adjust to taste']].map(function(x){return {item:x[0],qty:x[1]};})},
+  {title:'Whole spices',items:[['Cinnamon','2-inch stick'],['Cloves','6'],['Green cardamom','4'],['Bay leaves','2'],['Star anise','1'],['Fennel seeds','2 tsp'],['Kalpasi (stone flower)','2 small pieces'],['Marathi moggu','2'],['Black peppercorns','1/2 tsp']].map(function(x){return {item:x[0],qty:x[1]};})},
+  {title:'Powdered spices (no ready biryani masala needed)',items:[['Turmeric powder','1/2 tsp'],['Red chilli powder','1 1/2 tsp'],['Coriander powder','2 tsp'],['Garam masala','1/2 tsp'],['Black pepper powder','1/2 tsp']].map(function(x){return {item:x[0],qty:x[1]};})}
+ ],
+ parts:[
+  {title:'Clean and marinate the chicken',steps:['Take 750 g medium bone-in chicken pieces. Remove extra skin and fat, drain well, and make small cuts in the thick pieces so the masala goes in.','In a large bowl mix the chicken with 100 g curd, 20 g ginger-garlic paste, 1/2 tsp turmeric, 1 tsp red chilli powder, 1/2 tsp pepper powder, 1/2 tsp garam masala and 1 tsp salt. Mix for 2 minutes so every piece is coated.','Cover and refrigerate for 30 minutes, or up to 2 hours. Never leave raw chicken at room temperature for long.']},
+  {title:'Prepare the rice',steps:['Wash 500 g seeraga samba rice gently 3 times.','Soak in fresh water for 20 minutes, then drain completely. Do not soak for hours or the rice turns too soft.']},
+  {title:'Make the hotel-style masala (heavy 5 to 6 litre vessel)',steps:['Heat 100 ml oil and 30 ml ghee on medium flame for 2 minutes.','Add all the whole spices and stir for 30 to 45 seconds until strongly aromatic. Do not burn them.','Add 300 g thinly sliced onions. Fry 8 to 10 minutes on medium flame, stirring every 30 to 40 seconds, until golden brown. Dark or burnt onion makes the biryani bitter.','Add 4 slit green chillies and the remaining 20 g ginger-garlic paste. Fry about 2 minutes until the raw smell goes.','Add 200 g chopped tomatoes, 2 tsp coriander powder, the remaining 1/2 tsp chilli powder and a small pinch of salt. Cook about 5 minutes until soft and the oil separates.','Add 15 g mint and 15 g coriander leaves and mix for 2 minutes.','Add the marinated chicken. Mix gently for 2 minutes, cook 5 minutes on medium flame, then cover and cook 5 to 7 more minutes. The chicken is only part cooked now, it finishes with the rice.']},
+  {title:'Get the water right',steps:['For 500 g soaked rice, start with about 650 to 700 ml hot water. The chicken, curd and tomato have already released some liquid, so the total should be about 750 to 850 ml.','Add the hot water gradually. The exact amount depends on your rice brand, soaking time and how much water the chicken released.','Taste the boiling gravy. It should be slightly saltier than you want the finished biryani, because the rice absorbs salt.']},
+  {title:'Add the rice',steps:['Bring the masala and liquid to a rolling boil on high flame.','Add the drained rice, the remaining 15 g mint and 15 g coriander, and 1 tbsp lemon juice. Mix gently once.','Cook uncovered on medium flame for 6 to 8 minutes, until the water level drops, the rice shows above the liquid, small holes appear on top and very little free water is left. Do not wait until it is completely dry.']},
+  {title:'Dum cooking',steps:['Lower the flame to the lowest setting and close with a tight lid. Seal with dough if the lid is loose.','Place a thick iron or aluminium tawa on the stove and set the vessel on it so the bottom does not burn.','Cook on very low flame for 12 to 15 minutes, then switch off and rest for 10 to 15 minutes with the lid closed. Do not keep opening the lid.','Check that the chicken is fully cooked (74 degrees C inside). If not, cook a little more.']},
+  {title:'Finish and serve',steps:['Open the lid carefully, letting the steam escape away from your face.','Add 1 tsp ghee if you like. Lift the rice gently from the bottom and sides. Do not mix hard.','Serve with onion raita: beat 250 g thick curd smooth, mix in 1 chopped large onion, 1/2 chopped cucumber, 1 chopped green chilli, 1 tbsp coriander leaves, 1/4 tsp salt and 2 to 3 tbsp water, and chill until serving.']}
+ ],
+ mistakes:[['Too much water','Mushy biryani'],['Too little water','Hard rice'],['Burning the onions','Bitter taste'],['Too much garam masala','Strong artificial flavour'],['Over-mixing the rice','Broken grains'],['High flame during dum','Burnt bottom'],['Opening the lid repeatedly','Loss of steam']],
+ timeline:[['0 to 10 min','Clean and marinate the chicken'],['10 to 30 min','Soak rice and prepare ingredients'],['30 to 40 min','Prepare onion and tomato masala'],['40 to 52 min','Cook the marinated chicken'],['52 to 60 min','Add water and rice'],['60 to 75 min','Dum cooking'],['75 to 90 min','Rest, plate and serve']],
+ tip:'For a Chennai biryani-shop taste, focus on three things: seeraga samba rice, kalpasi with fennel seeds, and fresh mint and coriander.'}
+};
+TAMAP['Common mistakes to avoid']='தவிர்க்க வேண்டிய தவறுகள்'; TAMAP['Cooking schedule']='சமையல் நேரத்திட்டம்'; TAMAP['Mistake']='தவறு'; TAMAP['Result']='விளைவு'; TAMAP['Time']='நேரம்'; TAMAP['Activity']='வேலை';
+
 /* ---------- Recipe inside the planner ---------- */
 function recipeData(name){
   var key=name+'|'+st.people+'|'+st.lang;
   if(rcache[key]) return rcache[key];
+  if(RICH[name]&&st.lang==='English') return RICH[name];
   if(st.lang==='Tamil'&&TA[name]&&FULL[name]){
     var F=FULL[name], T=TA[name];
     return {lang:'Tamil',servings:st.people,ingredients:F.i.map(function(x,k){return {item:T.i[k],qty:fq(x[1],x[2],true)};}),steps:T.s,tip:T.t};
@@ -1472,9 +1550,104 @@ function renderPrep(){
 TAMAP['Add your own dish']='உங்கள் சொந்த உணவைச் சேர்'; TAMAP['Save dish']='உணவைச் சேமி'; TAMAP['Remove']='நீக்கு'; TAMAP['Dish name']='உணவின் பெயர்'; TAMAP['Type']='வகை'; TAMAP['Vegetarian']='சைவம்'; TAMAP['Suits breakfast']='காலை உணவுக்கு ஏற்றது';
 TAMAP['Share plan on WhatsApp']='திட்டத்தை வாட்ஸ்அப்பில் பகிர்'; TAMAP['Print plan']='திட்டத்தை அச்சிடு'; TAMAP['Get ready tonight']='இன்று இரவு தயார் செய்யுங்கள்';
 
+/* ---------- Kitchen assistant (agent) ---------- */
+var agHist=[], agBusy=false;
+function dayIdx(d){return DAYS.map(function(x){return x.toLowerCase();}).indexOf(String(d||'').toLowerCase());}
+function planSummary(){
+  var out=[];
+  DAYS.forEach(function(d,i){
+    var row={day:d}, any=false;
+    ['Breakfast','Lunch','Dinner'].forEach(function(mn,mi){
+      var p=[0,1,2].map(function(k){return st.plan[i][mi*3+k];}).filter(Boolean);
+      if(p.length){row[mn]=p;any=true;}
+    });
+    if(st.plan[i][9]){row.Dessert=st.plan[i][9];any=true;}
+    if(any) out.push(row);
+  });
+  return out;
+}
+var AGT={
+  get_state:function(){return {kitchen:Array.from(pantry),people:st.people,vegetarianOnly:!!st.veg,today:DAYS[(new Date().getDay()+6)%7],planned:planSummary()};},
+  add_kitchen_items:function(a){return {added:addItems((a.items||[]).join(','))};},
+  remove_kitchen_items:function(a){
+    var out=[]; (a.items||[]).forEach(function(x){var n=norm(x); if(pantry.has(n)){pantry.delete(n);out.push(n);}});
+    if(out.length) changed(); return {removed:out};
+  },
+  suggest_dishes:function(a){
+    var mx=Math.min(3,Math.max(0,Number(a.max_missing)));if(isNaN(mx))mx=1;
+    return RECIPES.filter(function(r){return !st.veg||r.v===1;}).map(function(r){return {name:r.n,kind:cls(r),minutes:r.t,missing:missingOf(r)};})
+      .filter(function(x){return x.missing.length<=mx;}).sort(function(x,y){return x.missing.length-y.missing.length;}).slice(0,25);
+  },
+  list_dishes:function(a){
+    var m={breakfast:0,main:6,side:1,gravy:2,dessert:9}[String(a.kind||'').toLowerCase()];
+    if(m===undefined) return {error:'kind must be breakfast, main, side, gravy or dessert'};
+    return mealPool(m).filter(function(r){return !st.veg||r.v===1;}).map(function(r){return {name:r.n,missing:missingOf(r).length};})
+      .sort(function(x,y){return x.missing-y.missing;}).slice(0,40);
+  },
+  plan_dish:function(a){
+    var di=dayIdx(a.day), mi=['breakfast','lunch','dinner'].indexOf(String(a.meal||'').toLowerCase()), idx;
+    if(di<0) return {error:'unknown day'};
+    if(String(a.meal||'').toLowerCase()==='dessert') idx=9;
+    else{var k=['main','side','gravy'].indexOf(String(a.kind||'main').toLowerCase()); if(mi<0||k<0) return {error:'unknown meal or kind'}; idx=mi*3+k;}
+    var want=String(a.dish||'').toLowerCase(), r=RECIPES.filter(function(x){return x.n.toLowerCase()===want;})[0];
+    if(!r) return {error:'unknown dish, use list_dishes'};
+    if(!mealPool(idx).some(function(x){return x.n===r.n;})) return {error:'dish does not suit this slot, use list_dishes'};
+    st.plan[di][idx]=r.n; save(); renderPlan(); return {ok:true,day:DAYS[di],slot:idx,dish:r.n};
+  },
+  get_plan:function(){return planSummary();},
+  clear_plan:function(){st.plan=blankPlan(); save(); renderPlan(); return {ok:true};},
+  get_shopping_list:function(){renderShop(); return {items:shopList.slice(0,60)};},
+  open_recipe:function(a){
+    var want=String(a.dish||'').toLowerCase(), r=RECIPES.filter(function(x){return x.n.toLowerCase()===want;})[0];
+    if(!r) return {error:'unknown dish'}; openRecipe(r.n); return {ok:true};
+  }
+};
+function agAdd(role,text){var d=h('div',{class:'agm '+role,text:text}); $('agLog').append(d); $('agLog').scrollTop=$('agLog').scrollHeight; return d;}
+async function agSend(text){
+  text=String(text||'').trim(); if(!text||agBusy) return;
+  if(!$('passcode').value.trim()){agAdd('bot','Please type the family passcode in the "Fridge photo or list" box first, then ask again.');return;}
+  agBusy=true; agAdd('me',text); var bub=agAdd('bot','Thinking...');
+  if(agHist.length>36) agHist=[];
+  agHist.push({role:'user',parts:[{text:text}]});
+  try{
+    for(var step=0;step<6;step++){
+      var out=await callApi('agent',{contents:agHist});
+      var parts=out.parts||[]; agHist.push({role:'model',parts:parts});
+      var calls=parts.filter(function(p){return p.functionCall;});
+      var say=parts.filter(function(p){return p.text;}).map(function(p){return p.text;}).join('\n');
+      if(!calls.length){bub.textContent=say||'Done.';break;}
+      var resp=calls.map(function(c){
+        var f=AGT[c.functionCall.name], r;
+        try{r=f?f(c.functionCall.args||{}):{error:'unknown tool'};}catch(e){r={error:String(e&&e.message||e)};}
+        return {functionResponse:{name:c.functionCall.name,response:{result:r}}};
+      });
+      agHist.push({role:'user',parts:resp});
+      bub.textContent=say||'Working on it...';
+      if(step===5) bub.textContent=(say||'')+'\n(I stopped here. Ask me to continue if you want more.)';
+    }
+  }catch(e){bub.textContent=isCancel(e)?'':errCopy(e); agHist=[];}
+  agBusy=false; $('agLog').scrollTop=$('agLog').scrollHeight;
+}
+function initAgent(){
+  var dlg=$('agDlg');
+  $('askFab').addEventListener('click',function(){
+    if(!dlg.open) dlg.showModal();
+    if(!$('agLog').childNodes.length) agAdd('bot','Hello! I can look at your kitchen, suggest what to cook, plan your week and make the shopping list. What would you like?');
+  });
+  $('agClose').addEventListener('click',function(){dlg.close();});
+  $('agForm').addEventListener('submit',function(e){e.preventDefault(); var t=$('agIn').value; $('agIn').value=''; agSend(t);});
+  [['What can I cook now?','What can I cook now with the items in my kitchen?'],
+   ['Plan this week','Plan breakfast, lunch and dinner for the whole week using what I have, and keep the dishes varied.'],
+   ['Plan tomorrow','Plan tomorrow with a main course, side dish and gravy for lunch and dinner.'],
+   ['What should I buy?','What should I buy for my planned meals?']].forEach(function(x){
+    $('agSug').append(h('button',{class:'tog',type:'button',text:x[0],onclick:function(){agSend(x[1]);}}));
+  });
+}
+TAMAP['Ask']='கேள்'; TAMAP['Kitchen assistant']='சமையலறை உதவியாளர்'; TAMAP['Send']='அனுப்பு';
+
 /* ---------- Boot ---------- */
 $('today').textContent=new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'});
-loadOwn(); buildGroups(); initPrefs(); initFinder(); initPhoto(); initList(); initIdeas(); initPlan(); initOwn(); initShare();
+loadOwn(); buildGroups(); initPrefs(); initFinder(); initPhoto(); initList(); initIdeas(); initPlan(); initOwn(); initShare(); initAgent();
 $('addForm').addEventListener('submit',function(e){
   e.preventDefault();
   var inp=$('addInput'); addItems(inp.value); inp.value='';
